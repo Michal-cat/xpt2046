@@ -31,12 +31,12 @@ use embedded_graphics_core::{
     geometry::Point,
     pixelcolor::{Rgb565, RgbColor},
 };
-use embedded_hal::{
-    delay::blocking::DelayUs, digital::blocking::OutputPin, spi::blocking::Transfer,
-};
 
 #[cfg(feature = "with_defmt")]
 use defmt::Format;
+use embedded_hal::digital::OutputPin;
+use stm32f4xx_hal::hal_02::blocking::delay::{DelayMs, DelayUs};
+use stm32f4xx_hal::hal_02::blocking::spi::Transfer;
 
 pub mod calibration;
 pub mod error;
@@ -239,7 +239,7 @@ where
             .set_low()
             .map_err(|e| Error::Bus(BusError::Pin(e)))?;
         self.spi
-            .transfer(&mut self.rx_buff, &self.tx_buff)
+            .transfer(&mut self.rx_buff)
             .map_err(|e| Error::Bus(BusError::Spi(e)))?;
         self.cs
             .set_high()
@@ -297,14 +297,14 @@ where
     }
 
     /// Reset the driver and preload tx buffer with register data.
-    pub fn init<D: DelayUs>(
+    pub fn init<D: DelayUs<u16> + DelayMs<u16>>(
         &mut self,
         delay: &mut D,
     ) -> Result<(), Error<BusError<SPIError, CSError>>> {
         self.tx_buff[0] = 0x80;
         self.cs.set_high()?;
         self.spi_read()?;
-        delay.delay_ms(1).map_err(|_| Error::Delay)?;
+        delay.delay_ms(1);
 
         /*
          * Load the tx_buffer with the channels config
@@ -406,7 +406,7 @@ where
     ) -> Result<(), Error<BusError<SPIError, CSError>>>
     where
         DT: DrawTarget<Color = Rgb565>,
-        DELAY: DelayUs,
+        DELAY: DelayUs<u16> + DelayMs<u16>,
     {
         let mut calibration_count = 0;
         let mut retry = 3;
